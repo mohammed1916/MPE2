@@ -175,10 +175,23 @@ class Scenario(BaseScenario):
             return 0
 
     def is_collision(self, agent1, agent2):
+        if agent1.adversary == agent2.adversary:
+            return False
         delta_pos = agent1.state.p_pos - agent2.state.p_pos
         dist = np.sqrt(np.sum(np.square(delta_pos)))
         dist_min = agent1.size + agent2.size
         return True if dist < dist_min else False
+    
+    def same_team_penalty(self, agent, world, radius=0.2):
+        penalty = 0
+        for other in world.agents:
+            if other is agent or other.adversary != agent.adversary:
+                continue
+            dist = np.linalg.norm(agent.state.p_pos - other.state.p_pos)
+            if dist < radius:
+                penalty -= (radius - dist)  # closer -> bigger penalty
+        return penalty
+
 
     # return all agents that are not adversaries
     def good_agents(self, world):
@@ -195,6 +208,7 @@ class Scenario(BaseScenario):
             if agent.adversary
             else self.agent_reward(agent, world)
         )
+        main_reward += self.same_team_penalty(agent, world, radius=0.2)
         return main_reward
 
     def agent_reward(self, agent, world):
@@ -213,6 +227,7 @@ class Scenario(BaseScenario):
             for a in adversaries:
                 if self.is_collision(a, agent):
                     rew -= 10
+        
 
         # agents are penalized for exiting the screen, so that they can be caught by the adversaries
         def bound(x):
