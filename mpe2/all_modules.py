@@ -6,6 +6,7 @@ from mpe2 import (
     simple_speaker_listener_v4,
     simple_spread_v3,
     simple_tag_v3,
+    simple_tag_no_collision_detect_radius_v3,
     simple_v3,
     simple_world_comm_v3,
 )
@@ -18,6 +19,7 @@ mpe_environments = {
     "mpe/simple_speaker_listener_v4": simple_speaker_listener_v4,
     "mpe/simple_spread_v3": simple_spread_v3,
     "mpe/simple_tag_v3": simple_tag_v3,
+    "mpe/simple_tag_no_collision_detect_radius_v3": simple_tag_no_collision_detect_radius_v3,
     "mpe/simple_world_comm_v3": simple_world_comm_v3,
     "mpe/simple_v3": simple_v3,
 }

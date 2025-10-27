@@ -13,6 +13,7 @@ from mpe2 import (
     simple_push_v3,
     simple_reference_v3,
     simple_speaker_listener_v4,
+    simple_tag_no_collision_detect_radius,
     simple_spread_v3,
     simple_tag_v3,
     simple_v3,
@@ -46,6 +47,10 @@ parameterized_envs = [
     [
         simple_tag_v3,
         dict(num_good=5, num_adversaries=10, num_obstacles=4, max_cycles=50),
+    ],
+    [
+        simple_tag_no_collision_detect_radius,
+        dict(num_good=3, num_adversaries=2, num_obstacles=0, max_cycles=50),
     ],
     [
         simple_tag_v3,

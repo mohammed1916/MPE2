@@ -9,6 +9,7 @@ all_envs = {
         "simple_reference",
         "simple_speaker_listener",
         "simple_spread",
+        "simple_tag_no_collision_detect_radius"
         "simple_tag",
         "simple_world_comm",
         "simple",
