@@ -56,6 +56,7 @@ class Entity:  # properties and state of physical world entity
 class Landmark(Entity):  # properties of landmark entities
     def __init__(self):
         super().__init__()
+        self.movable = False
 
 
 class Agent(Entity):  # properties of agent entities
@@ -98,7 +99,7 @@ class World:  # multi-agent world
         self.damping = 0.25
         # contact response parameters
         self.contact_force = 1e2
-        self.contact_margin = 1e-3
+        self.contact_margin = 1
 
     # return all entities in the world
     @property
@@ -143,24 +144,34 @@ class World:  # multi-agent world
                     else 0.0
                 )
                 p_force[i] = agent.action.u + noise
+        # print("apply_action_force p_force: ", p_force)
         return p_force
 
     # gather physical forces acting on entities
     def apply_environment_force(self, p_force):
         # simple (but inefficient) collision response
-        for a, entity_a in enumerate(self.entities):
-            for b, entity_b in enumerate(self.entities):
-                if b <= a:
-                    continue
-                [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
-                if f_a is not None:
-                    if p_force[a] is None:
-                        p_force[a] = 0.0
-                    p_force[a] = f_a + p_force[a]
-                if f_b is not None:
-                    if p_force[b] is None:
-                        p_force[b] = 0.0
-                    p_force[b] = f_b + p_force[b]
+        movable_entities = []
+        for i, entity in enumerate(self.entities):
+            # p_force[i] = 0
+            if entity in self.landmarks:
+                p_force[i] = 0     # landmarks have no forces
+                # pass
+            else:
+                movable_entities.append(entity)
+
+        # for a, entity_a in enumerate(movable_entities):
+        #     for b, entity_b in enumerate(movable_entities):
+        #         if b <= a:
+        #             continue
+        #         [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
+        #         if f_a is not None:
+        #             if p_force[a] is None:
+        #                 p_force[a] = 0.0
+        #             p_force[a] = f_a + p_force[a]
+        #         if f_b is not None:
+        #             if p_force[b] is None:
+        #                 p_force[b] = 0.0
+        #             p_force[b] = f_b + p_force[b]
         return p_force
 
     # integrate physical state

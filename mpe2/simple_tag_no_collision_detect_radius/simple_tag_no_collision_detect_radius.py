@@ -76,11 +76,11 @@ from mpe2._mpe_utils.simple_env import SimpleEnv, make_env
 class raw_env(SimpleEnv, EzPickle):
     def __init__(
         self,
-        num_good=1,
-        num_adversaries=3,
-        num_obstacles=2,
-        max_cycles=25,
-        continuous_actions=False,
+        num_good=3,
+        num_adversaries=2,
+        num_obstacles=0,
+        continuous_actions=True,
+        max_cycles=100,
         render_mode=None,
         dynamic_rescaling=False,
     ):
@@ -89,7 +89,7 @@ class raw_env(SimpleEnv, EzPickle):
             num_good=num_good,
             num_adversaries=num_adversaries,
             num_obstacles=num_obstacles,
-            max_cycles=max_cycles,
+            max_cycles= max_cycles,
             continuous_actions=continuous_actions,
             render_mode=render_mode,
         )
@@ -112,14 +112,14 @@ parallel_env = parallel_wrapper_fn(env)
 
 
 class Scenario(BaseScenario):
-    def make_world(self, num_good=1, num_adversaries=3, num_obstacles=2):
+    def make_world(self, num_good=3, num_adversaries=2, num_obstacles=0):
         world = World()
         # set any world properties first
         world.dim_c = 2
         num_good_agents = num_good
         num_adversaries = num_adversaries
         num_agents = num_adversaries + num_good_agents
-        num_landmarks = num_obstacles
+        num_landmarks = 2
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
@@ -136,7 +136,7 @@ class Scenario(BaseScenario):
         world.landmarks = [Landmark() for i in range(num_landmarks)]
         for i, landmark in enumerate(world.landmarks):
             landmark.name = "landmark %d" % i
-            landmark.collide = True
+            landmark.collide = False
             landmark.movable = False
             landmark.size = 0.2
             landmark.boundary = False
@@ -152,7 +152,7 @@ class Scenario(BaseScenario):
             )
             # random properties for landmarks
         for i, landmark in enumerate(world.landmarks):
-            landmark.color = np.array([0.25, 0.25, 0.25])
+            landmark.color = np.array([0.5, 1, 1])
         # set random initial states
         for agent in world.agents:
             agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
@@ -270,6 +270,7 @@ class Scenario(BaseScenario):
         for entity in world.landmarks:
             if not entity.boundary:
                 entity_pos.append(entity.state.p_pos - agent.state.p_pos)
+        # print("entity_pos: ",entity_pos)
         # communication of all other agents
         comm = []
         other_pos = []
