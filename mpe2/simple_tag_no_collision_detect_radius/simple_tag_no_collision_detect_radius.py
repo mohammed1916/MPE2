@@ -65,6 +65,7 @@ simple_tag_no_collision_detect_radius.env(num_good=1, num_adversaries=3, num_obs
 """
 
 import numpy as np
+import logging
 from gymnasium.utils import EzPickle
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 
@@ -158,10 +159,15 @@ class Scenario(BaseScenario):
             agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
+        logger = logging.getLogger(__name__)
         for i, landmark in enumerate(world.landmarks):
             if not landmark.boundary:
                 landmark.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
                 landmark.state.p_vel = np.zeros(world.dim_p)
+                print("Changing Landmark position: ", landmark.state.p_pos)
+                # use debug-level logging so position changes do not flood stdout by default
+                # logger.debug("Changing Landmark position: %s", landmark.state.p_pos)
+
 
     def benchmark_data(self, agent, world):
         # returns data for benchmarking purposes
