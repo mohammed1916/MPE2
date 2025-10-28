@@ -43,6 +43,7 @@ class SimpleEnv(AECEnv):
         continuous_actions=False,
         local_ratio=None,
         dynamic_rescaling=False,
+        stable_rendering=True,
     ):
         super().__init__()
 
@@ -68,6 +69,11 @@ class SimpleEnv(AECEnv):
         self.continuous_actions = continuous_actions
         self.local_ratio = local_ratio
         self.dynamic_rescaling = dynamic_rescaling
+        # When True use the original camera range for pixel mapping so static
+        # entities (landmarks) remain visually stable even when agents move.
+        # If False, fall back to previous behaviour where positions map using
+        # the current cam_range (may cause apparent landmark movement).
+        self.stable_rendering = stable_rendering
 
         self.scenario.reset_world(self.world, self.np_random)
 
@@ -310,28 +316,68 @@ class SimpleEnv(AECEnv):
         text_line = 0
         for e, entity in enumerate(self.world.entities):
             # geometry
-            x, y = entity.state.p_pos
-            y *= (
-                -1
-            )  # this makes the display mimic the old pyglet setup (ie. flips image)
-            x = (
-                (x / cam_range) * self.width // 2 * 0.9
-            )  # the .9 is just to keep entities from appearing "too" out-of-bounds
-            y = (y / cam_range) * self.height // 2 * 0.9
-            x += self.width // 2
-            y += self.height // 2
+            # Branch rendering behaviour based on stable_rendering flag.
+            if self.stable_rendering:
+                x, y = entity.state.p_pos
+                # flip y to match previous pyglet behaviour
+                y = -y
 
-            # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
-            if self.dynamic_rescaling:
-                radius = entity.size * 350 * scaling_factor
+                # Use original_cam_range for stable mapping so static entities (landmarks)
+                # don't shift when moving agents change cam_range. If original_cam_range
+                # is not available (<=0), fall back to cam_range.
+                denom = (
+                    self.original_cam_range
+                    if (hasattr(self, "original_cam_range") and self.original_cam_range > 0)
+                    else cam_range
+                )
+
+                # compute float positions (use float division, avoid floor-division //)
+                px = (x / denom) * (self.width / 2.0) * 0.9
+                py = (y / denom) * (self.height / 2.0) * 0.9
+                px += (self.width / 2.0)
+                py += (self.height / 2.0)
+
+                # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
+                base_radius = entity.size * 350.0
+                if self.dynamic_rescaling:
+                    radius = base_radius * scaling_factor
+                else:
+                    radius = base_radius
+                # ensure radius is a sensible integer for pygame
+                radius = max(1, int(round(radius)))
+
+                # convert coords to ints and clamp to screen bounds
+                ix = max(0, min(self.width - 1, int(round(px))))
+                iy = max(0, min(self.height - 1, int(round(py))))
+
+                # safe color tuple: entity.color may be floats in [0,1]; scale to 0-255
+                try:
+                    color = tuple(max(0, min(255, int(round(c * 200)))) for c in entity.color)
+                except Exception:
+                    color = (0, 0, 0)
+
+                pygame.draw.circle(self.screen, color, (ix, iy), radius)
+                pygame.draw.circle(self.screen, (0, 0, 0), (ix, iy), radius, 1)  # borders
             else:
-                radius = entity.size * 350
+                # legacy behaviour: map using the current cam_range and original math
+                x, y = entity.state.p_pos
+                y *= -1  # this makes the display mimic the old pyglet setup (ie. flips image)
+                x = ((x / cam_range) * self.width // 2 * 0.9)  # keep original floor-division behaviour
+                y = (y / cam_range) * self.height // 2 * 0.9
+                x += self.width // 2
+                y += self.height // 2
 
-            pygame.draw.circle(self.screen, entity.color * 200, (x, y), radius)
-            pygame.draw.circle(self.screen, (0, 0, 0), (x, y), radius, 1)  # borders
-            assert (
-                0 < x < self.width and 0 < y < self.height
-            ), f"Coordinates {(x, y)} are out of bounds."
+                # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
+                if self.dynamic_rescaling:
+                    radius = entity.size * 350 * scaling_factor
+                else:
+                    radius = entity.size * 350
+
+                pygame.draw.circle(self.screen, entity.color * 200, (x, y), radius)
+                pygame.draw.circle(self.screen, (0, 0, 0), (x, y), radius, 1)  # borders
+                assert (
+                    0 < x < self.width and 0 < y < self.height
+                ), f"Coordinates {(x, y)} are out of bounds."
 
             # text
             if isinstance(entity, Agent):
