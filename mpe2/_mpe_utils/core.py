@@ -1,4 +1,5 @@
 import numpy as np
+import traceback
 
 
 class EntityState:  # physical/external base state of all entities
@@ -56,7 +57,13 @@ class Entity:  # properties and state of physical world entity
 class Landmark(Entity):  # properties of landmark entities
     def __init__(self):
         super().__init__()
+        # use LandmarkState which prevents changing position after initial set
         self.movable = False
+        self.collide = False
+        self.max_speed = 0
+        self.accel = 0
+        self.density = 0
+        
 
 
 class Agent(Entity):  # properties of agent entities
@@ -159,19 +166,19 @@ class World:  # multi-agent world
             else:
                 movable_entities.append(entity)
 
-        # for a, entity_a in enumerate(movable_entities):
-        #     for b, entity_b in enumerate(movable_entities):
-        #         if b <= a:
-        #             continue
-        #         [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
-        #         if f_a is not None:
-        #             if p_force[a] is None:
-        #                 p_force[a] = 0.0
-        #             p_force[a] = f_a + p_force[a]
-        #         if f_b is not None:
-        #             if p_force[b] is None:
-        #                 p_force[b] = 0.0
-        #             p_force[b] = f_b + p_force[b]
+        for a, entity_a in enumerate(movable_entities):
+            for b, entity_b in enumerate(movable_entities):
+                if b <= a:
+                    continue
+                [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
+                if f_a is not None:
+                    if p_force[a] is None:
+                        p_force[a] = 0.0
+                    p_force[a] = f_a + p_force[a]
+                if f_b is not None:
+                    if p_force[b] is None:
+                        p_force[b] = 0.0
+                    p_force[b] = f_b + p_force[b]
         return p_force
 
     # integrate physical state
@@ -181,6 +188,7 @@ class World:  # multi-agent world
                 continue
             entity.state.p_pos += entity.state.p_vel * self.dt
             entity.state.p_vel = entity.state.p_vel * (1 - self.damping)
+            # print("integrate_state: ", entity.name, "**", entity.state.p_pos, " ** ", entity.state.p_vel)
             if p_force[i] is not None:
                 entity.state.p_vel += (p_force[i] / entity.mass) * self.dt
             if entity.max_speed is not None:
@@ -216,6 +224,7 @@ class World:  # multi-agent world
         if entity_a is entity_b:
             return [None, None]  # don't collide against itself
         # compute actual distance between entities
+        # print("get_collision_force: ", entity_a.name, entity_b.name)
         delta_pos = entity_a.state.p_pos - entity_b.state.p_pos
         dist = np.sqrt(np.sum(np.square(delta_pos)))
         # minimum allowable distance
