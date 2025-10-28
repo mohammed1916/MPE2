@@ -162,11 +162,18 @@ class Scenario(BaseScenario):
         logger = logging.getLogger(__name__)
         for i, landmark in enumerate(world.landmarks):
             if not landmark.boundary:
-                landmark.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
+                # Only randomize landmark positions on the first reset. Subsequent
+                # calls to `reset_world` will keep the same landmark positions
+                # (but reset landmark velocity). This prevents landmarks from
+                # moving every episode while preserving initial randomness.
+                if not getattr(landmark, "_init_pos_set", False):
+                    landmark.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
+                    landmark._init_pos_set = True
+                    print("Changing Landmark position: ", landmark.state.p_pos)
+                    # use debug-level logging so position changes do not flood stdout by default
+                    # logger.debug("Changing Landmark position: %s", landmark.state.p_pos)
+                # Always reset velocity to zero on each world reset
                 landmark.state.p_vel = np.zeros(world.dim_p)
-                print("Changing Landmark position: ", landmark.state.p_pos)
-                # use debug-level logging so position changes do not flood stdout by default
-                # logger.debug("Changing Landmark position: %s", landmark.state.p_pos)
 
 
     def benchmark_data(self, agent, world):
