@@ -106,7 +106,7 @@ class SimpleEnv(AECEnv):
             state_dim += obs_dim
             if self.continuous_actions:
                 self.action_spaces[agent.name] = spaces.Box(
-                    low=0, high=1, shape=(space_dim,)
+                    low=-1, high=1, shape=(space_dim,)
                 )
             else:
                 self.action_spaces[agent.name] = spaces.Discrete(space_dim)
@@ -267,6 +267,10 @@ class SimpleEnv(AECEnv):
             if self.steps >= self.max_cycles:
                 for a in self.agents:
                     self.truncations[a] = True
+            # Check if goal is reached and terminate early
+            if self.scenario.is_goal_reached(self.world):
+                for a in self.agents:
+                    self.terminations[a] = True
         else:
             self._clear_rewards()
 

@@ -73,6 +73,11 @@ from mpe2._mpe_utils.core import Agent, Landmark, World
 from mpe2._mpe_utils.scenario import BaseScenario
 from mpe2._mpe_utils.simple_env import SimpleEnv, make_env
 
+try:
+    import shapely.geometry as sg
+except ImportError:
+    sg = None
+
 
 class raw_env(SimpleEnv, EzPickle):
     def __init__(
@@ -81,7 +86,7 @@ class raw_env(SimpleEnv, EzPickle):
         num_adversaries=2,
         num_obstacles=0,
         continuous_actions=True,
-        max_cycles=100,
+        max_cycles=20,
         render_mode=None,
         dynamic_rescaling=False,
     ):
@@ -120,7 +125,7 @@ class Scenario(BaseScenario):
         num_good_agents = num_good
         num_adversaries = num_adversaries
         num_agents = num_adversaries + num_good_agents
-        num_landmarks = 2
+        num_landmarks = 1
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
@@ -130,7 +135,8 @@ class Scenario(BaseScenario):
             agent.name = f"{base_name}_{base_index}"
             agent.collide = True
             agent.silent = True
-            agent.size = 0.075 if agent.adversary else 0.05
+            # agent.size = 0.075 if agent.adversary else 0.05
+            agent.size = 0.075*2 if agent.adversary else 0.05*2
             agent.accel = 3.0 if agent.adversary else 4.0
             agent.max_speed = 1.0 if agent.adversary else 1.3
         # add landmarks
@@ -139,8 +145,13 @@ class Scenario(BaseScenario):
             landmark.name = "landmark %d" % i
             landmark.collide = False
             landmark.movable = False
-            landmark.size = 0.2
+            landmark.size = 0.2*2
             landmark.boundary = False
+        # add polygons for negative space boundaries
+        if sg:
+            world.polygons = [sg.Polygon([(-0.9, -0.9), (0.9, -0.9), (0.9, 0.9), (-0.9, 0.9)])]
+        else:
+            world.polygons = []
         return world
 
     def reset_world(self, world, np_random):
@@ -188,12 +199,26 @@ class Scenario(BaseScenario):
             return 0
 
     def is_collision(self, agent1, agent2):
-        if agent1.adversary == agent2.adversary:
-            return False
+        # Do not collide with same team
+        # if agent1.adversary == agent2.adversary:
+        #     return False
+
+        # Compute distance between agents
         delta_pos = agent1.state.p_pos - agent2.state.p_pos
         dist = np.sqrt(np.sum(np.square(delta_pos)))
         dist_min = agent1.size + agent2.size
-        return True if dist < dist_min else False
+
+        # If within collision range
+        if dist < dist_min:
+            # Stop the good agent’s motion if caught
+            # if not agent1.adversary:
+            #     agent1.state.p_vel *= 0
+            # elif not agent2.adversary:
+            #     agent2.state.p_vel *= 0
+            return True
+
+        return False
+
     
     def same_team_penalty(self, agent, world, radius=0.2):
         penalty = 0
@@ -225,80 +250,130 @@ class Scenario(BaseScenario):
         return main_reward
 
     def agent_reward(self, agent, world):
-        # Agents are negatively rewarded if caught by adversaries
         rew = 0
-        shape = False
         adversaries = self.adversaries(world)
-        if (
-            shape
-        ):  # reward can optionally be shaped (increased reward for increased distance from adversary)
-            for adv in adversaries:
-                rew += 0.1 * np.sqrt(
-                    np.sum(np.square(agent.state.p_pos - adv.state.p_pos))
-                )
-        if agent.collide:
-            for a in adversaries:
-                if self.is_collision(a, agent):
-                    rew -= 10
-        
 
-        # agents are penalized for exiting the screen, so that they can be caught by the adversaries
-        def bound(x):
-            if x < 0.9:
-                return 0
-            if x < 1.0:
-                return (x - 0.9) * 10
-            return min(np.exp(2 * x - 2), 10)
+        # Penalize if caught by adversaries
+        for a in adversaries:
+            if self.is_collision(a, agent):
+                rew -= 10
+        # Penalize if distance is small to adversaries
+        for a in adversaries:
+            dist = np.linalg.norm(agent.state.p_pos - a.state.p_pos)
+            rew -= 0.1 * (1 - dist)
 
-        for p in range(world.dim_p):
-            x = abs(agent.state.p_pos[p])
-            rew -= bound(x)
+        # Reward for being near the landmark
+        dists = [np.linalg.norm(agent.state.p_pos - l.state.p_pos) for l in world.landmarks]
+        min_dist = min(dists)
+        rew += 20 * (1 - min_dist)  # closer → higher reward
+
+        # Penalize for going out of bounds (polygon negative space)
+        if sg and world.polygons:
+            for poly in world.polygons:
+                if not poly.contains(sg.Point(agent.state.p_pos)):
+                    dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
+                    rew -= min(np.exp(3 * dist - 2), 20)  # steeper penalty for being outside
+        else:
+            # Fallback to square bounds
+            def bound(x):
+                if x < 0.7:
+                    return 0
+                if x < 0.9:
+                    return (x - 0.7) * 5  # penalty starts earlier
+                if x < 1.0:
+                    return (x - 0.9) * 20  # sharper penalty near edge
+                return min(np.exp(3 * x - 2), 20)  # steeper exponential
+
+            for p in range(world.dim_p):
+                x = abs(agent.state.p_pos[p])
+                rew -= bound(x)
 
         return rew
 
+
     def adversary_reward(self, agent, world):
-        # Adversaries are rewarded for collisions with agents
         rew = 0
-        shape = False
+        shape = True
         agents = self.good_agents(world)
-        adversaries = self.adversaries(world)
-        if (
-            shape
-        ):  # reward can optionally be shaped (decreased reward for increased distance from agents)
-            for adv in adversaries:
-                rew -= 0.1 * min(
-                    np.sqrt(np.sum(np.square(a.state.p_pos - adv.state.p_pos)))
-                    for a in agents
-                )
-        if agent.collide:
-            for ag in agents:
-                for adv in adversaries:
-                    if self.is_collision(ag, adv):
-                        rew += 10
+
+        for ag in agents:
+            dist = np.linalg.norm(agent.state.p_pos - ag.state.p_pos)
+            if shape:
+                rew += 0.5 * (1 - dist)
+            if agent.collide and self.is_collision(agent, ag):
+                rew += 10
         return rew
 
     def observation(self, agent, world):
-        # get positions of all entities in this agent's reference frame
-        entity_pos = []
-        for entity in world.landmarks:
-            if not entity.boundary:
-                entity_pos.append(entity.state.p_pos - agent.state.p_pos)
-        # print("entity_pos: ",entity_pos)
-        # communication of all other agents
-        comm = []
-        other_pos = []
-        other_vel = []
+        # Radius-based observation for fixed size
+        radius = 1.0  # observation radius
+        max_agents = 3  # max other agents to observe
+        max_landmarks = 1  # max landmarks to observe
+        
+        # Self state
+        obs = [agent.state.p_vel, agent.state.p_pos]
+        
+        # Get nearby landmarks
+        landmark_infos = []
+        for lm in world.landmarks:
+            if not lm.boundary:
+                rel_pos = lm.state.p_pos - agent.state.p_pos
+                dist = np.linalg.norm(rel_pos)
+                if dist <= radius:
+                    landmark_infos.append((dist, rel_pos, 0))  # type=0 for landmark
+        
+        # Sort by distance and take closest
+        landmark_infos.sort(key=lambda x: x[0])
+        for i in range(max_landmarks):
+            if i < len(landmark_infos):
+                obs.extend([landmark_infos[i][1], np.array([landmark_infos[i][2]])])  # pos, type
+            else:
+                obs.extend([np.zeros(2), np.array([0])])  # pad
+        
+        # Get nearby other agents
+        agent_infos = []
         for other in world.agents:
             if other is agent:
                 continue
-            comm.append(other.state.c)
-            other_pos.append(other.state.p_pos - agent.state.p_pos)
-            if not other.adversary:
-                other_vel.append(other.state.p_vel)
-        return np.concatenate(
-            [agent.state.p_vel]
-            + [agent.state.p_pos]
-            + entity_pos
-            + other_pos
-            + other_vel
-        )
+            rel_pos = other.state.p_pos - agent.state.p_pos
+            dist = np.linalg.norm(rel_pos)
+            if dist <= radius:
+                vel = other.state.p_vel if not other.adversary else np.zeros(2)
+                type_val = 1 if not other.adversary else 2  # 1=good, 2=adversary
+                agent_infos.append((dist, rel_pos, vel, type_val))
+        
+        # Sort by distance and take closest
+        agent_infos.sort(key=lambda x: x[0])
+        for i in range(max_agents):
+            if i < len(agent_infos):
+                obs.extend([agent_infos[i][1], agent_infos[i][2], np.array([agent_infos[i][3]])])  # pos, vel, type
+            else:
+                obs.extend([np.zeros(2), np.zeros(2), np.array([0])])  # pad
+        
+        return np.concatenate(obs)
+
+    def is_goal_reached(self, world, required_count=1, eps=1e-6):
+        """Return True if at least `required_count` unique good agents are within
+        contact distance of any non-boundary landmark.
+        """
+        reached = set()
+
+        for ag in world.agents:
+            # only consider good agents (not adversaries)
+            if ag.adversary:
+                continue
+
+            ag_id = ag.name
+
+            for lm in world.landmarks:
+                if lm.boundary:
+                    continue
+                # Euclidean distance
+                dist = np.linalg.norm(ag.state.p_pos - lm.state.p_pos)
+                # If within contact distance (agent.size + landmark.size)
+                if dist <= (ag.size + lm.size + eps):
+                    reached.add(ag_id)
+                    # short-circuit if we've reached the required count
+                    if len(reached) >= required_count:
+                        return True
+        return False
