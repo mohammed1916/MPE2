@@ -73,10 +73,10 @@ from mpe2._mpe_utils.core import Agent, Landmark, World
 from mpe2._mpe_utils.scenario import BaseScenario
 from mpe2._mpe_utils.simple_env import SimpleEnv, make_env
 
-try:
-    import shapely.geometry as sg
-except ImportError:
-    sg = None
+# try:
+import shapely.geometry as sg
+# except ImportError:
+    # sg = None
 
 
 class raw_env(SimpleEnv, EzPickle):
@@ -86,7 +86,7 @@ class raw_env(SimpleEnv, EzPickle):
         num_adversaries=2,
         num_obstacles=0,
         continuous_actions=True,
-        max_cycles=20,
+        max_cycles=200,
         render_mode=None,
         dynamic_rescaling=False,
     ):
@@ -148,10 +148,10 @@ class Scenario(BaseScenario):
             landmark.size = 0.2*2
             landmark.boundary = False
         # add polygons for negative space boundaries
-        if sg:
-            world.polygons = [sg.Polygon([(-0.9, -0.9), (0.9, -0.9), (0.9, 0.9), (-0.9, 0.9)])]
-        else:
-            world.polygons = []
+        # if sg:
+        world.polygons = [sg.Polygon([(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)])]
+        # else:
+            # world.polygons = []
         return world
 
     def reset_world(self, world, np_random):
@@ -265,28 +265,30 @@ class Scenario(BaseScenario):
         # Reward for being near the landmark
         dists = [np.linalg.norm(agent.state.p_pos - l.state.p_pos) for l in world.landmarks]
         min_dist = min(dists)
-        rew += 20 * (1 - min_dist)  # closer → higher reward
+        
 
         # Penalize for going out of bounds (polygon negative space)
-        if sg and world.polygons:
-            for poly in world.polygons:
-                if not poly.contains(sg.Point(agent.state.p_pos)):
-                    dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
-                    rew -= min(np.exp(3 * dist - 2), 20)  # steeper penalty for being outside
-        else:
-            # Fallback to square bounds
-            def bound(x):
-                if x < 0.7:
-                    return 0
-                if x < 0.9:
-                    return (x - 0.7) * 5  # penalty starts earlier
-                if x < 1.0:
-                    return (x - 0.9) * 20  # sharper penalty near edge
-                return min(np.exp(3 * x - 2), 20)  # steeper exponential
+        # if sg and world.polygons:
+        
+        for poly in world.polygons:
+            if not poly.contains(sg.Point(agent.state.p_pos)):
+                dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
+                rew -= min(np.exp(3 * dist - 2), 20)  # steeper penalty for being outside
+        
+        # else:
+        #     # Fallback to square bounds
+        #     def bound(x):
+        #         if x < 0.7:
+        #             return 0
+        #         if x < 0.9:
+        #             return (x - 0.7) * 5  # penalty starts earlier
+        #         if x < 1.0:
+        #             return (x - 0.9) * 20  # sharper penalty near edge
+        #         return min(np.exp(3 * x - 2), 20)  # steeper exponential
 
-            for p in range(world.dim_p):
-                x = abs(agent.state.p_pos[p])
-                rew -= bound(x)
+        #     for p in range(world.dim_p):
+        #         x = abs(agent.state.p_pos[p])
+        #         rew -= bound(x)
 
         return rew
 
@@ -312,6 +314,15 @@ class Scenario(BaseScenario):
         
         # Self state
         obs = [agent.state.p_vel, agent.state.p_pos]
+        
+        # Add direction to landmark (relative position vector)
+        landmark = world.landmarks[0]  # assuming single landmark
+        rel_pos_to_landmark = landmark.state.p_pos - agent.state.p_pos
+        obs.append(rel_pos_to_landmark)
+        
+        # Add angle to landmark
+        angle_to_landmark = np.arctan2(rel_pos_to_landmark[1], rel_pos_to_landmark[0])
+        obs.append(np.array([angle_to_landmark]))
         
         # Get nearby landmarks
         landmark_infos = []
