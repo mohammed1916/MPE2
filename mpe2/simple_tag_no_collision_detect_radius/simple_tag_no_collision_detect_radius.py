@@ -86,7 +86,7 @@ class raw_env(SimpleEnv, EzPickle):
         num_adversaries=2,
         num_obstacles=0,
         continuous_actions=True,
-        max_cycles=200,
+        max_cycles=20,
         render_mode=None,
         dynamic_rescaling=False,
     ):
@@ -265,15 +265,16 @@ class Scenario(BaseScenario):
         # Reward for being near the landmark
         dists = [np.linalg.norm(agent.state.p_pos - l.state.p_pos) for l in world.landmarks]
         min_dist = min(dists)
+        rew += 5 * (1 - min_dist)
         
 
-        # Penalize for going out of bounds (polygon negative space)
+        # Penalize for proximity to boundary (treating as obstacle)
         # if sg and world.polygons:
         
         for poly in world.polygons:
-            if not poly.contains(sg.Point(agent.state.p_pos)):
-                dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
-                rew -= min(np.exp(3 * dist - 2), 20)  # steeper penalty for being outside
+            dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
+            if dist < 0.2:
+                rew -= 20 * (0.2 - dist) / 0.2  # linear penalty for being too close to boundary
         
         # else:
         #     # Fallback to square bounds
@@ -323,6 +324,10 @@ class Scenario(BaseScenario):
         # Add angle to landmark
         angle_to_landmark = np.arctan2(rel_pos_to_landmark[1], rel_pos_to_landmark[0])
         obs.append(np.array([angle_to_landmark]))
+        
+        # Add distance to boundary (treating boundary as obstacle)
+        dist_to_boundary = world.polygons[0].boundary.distance(sg.Point(agent.state.p_pos))
+        obs.append(np.array([dist_to_boundary]))
         
         # Get nearby landmarks
         landmark_infos = []
