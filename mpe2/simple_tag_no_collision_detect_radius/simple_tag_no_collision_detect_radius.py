@@ -86,7 +86,7 @@ class raw_env(SimpleEnv, EzPickle):
         num_adversaries=2,
         num_obstacles=0,
         continuous_actions=True,
-        max_cycles=20,
+        max_cycles=500,
         render_mode=None,
         dynamic_rescaling=False,
     ):
@@ -125,7 +125,7 @@ class Scenario(BaseScenario):
         num_good_agents = num_good
         num_adversaries = num_adversaries
         num_agents = num_adversaries + num_good_agents
-        num_landmarks = 1
+        num_landmarks = 2
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
@@ -137,7 +137,7 @@ class Scenario(BaseScenario):
             agent.silent = True
             # agent.size = 0.075 if agent.adversary else 0.05
             agent.size = 0.075*2 if agent.adversary else 0.05*2
-            agent.accel = 3.0 if agent.adversary else 4.0
+            agent.accel = 3.0*3 if agent.adversary else 4.0*3
             agent.max_speed = 1.0 if agent.adversary else 1.3
         # add landmarks
         world.landmarks = [Landmark() for i in range(num_landmarks)]
