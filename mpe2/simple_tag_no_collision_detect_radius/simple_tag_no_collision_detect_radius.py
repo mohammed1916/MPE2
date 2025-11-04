@@ -279,31 +279,25 @@ class Scenario(BaseScenario):
     
 
         # Penalize for proximity to boundary (treating as obstacle)
-        # if sg and world.polygons:
-        # """
-        
-        """
-        for poly in world.polygons:
-            dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
-            if dist < 0.2:
-                rew -= 20 * (0.2 - dist) / 0.2  # linear penalty for being too close to boundary
-        """
-        
-        # """
-        # else:
-        #     # Fallback to square bounds
-        #     def bound(x):
-        #         if x < 0.7:
-        #             return 0
-        #         if x < 0.9:
-        #             return (x - 0.7) * 5  # penalty starts earlier
-        #         if x < 1.0:
-        #             return (x - 0.9) * 20  # sharper penalty near edge
-        #         return min(np.exp(3 * x - 2), 20)  # steeper exponential
+        if sg and world.polygons:
+            for poly in world.polygons:
+                dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
+                if dist < 0.15:
+                    rew -= 10 * (0.15 - dist) / 0.15  # linear penalty for being too close to boundary
+        else:
+            # Fallback to square bounds
+            def bound(x):
+                if x < 0.7:
+                    return 0
+                if x < 0.9:
+                    return (x - 0.7) * 5  # penalty starts earlier
+                if x < 1.0:
+                    return (x - 0.9) * 20  # sharper penalty near edge
+                return min(np.exp(3 * x - 2), 20)  # steeper exponential
 
-        #     for p in range(world.dim_p):
-        #         x = abs(agent.state.p_pos[p])
-        #         rew -= bound(x)
+            for p in range(world.dim_p):
+                x = abs(agent.state.p_pos[p])
+                rew -= bound(x)
 
         return rew
 
@@ -326,6 +320,27 @@ class Scenario(BaseScenario):
                     ag.color = np.array([0, 0, 0])
                     print(f"{agent.name} caught {ag.name}!")
                     rew += 100
+        
+        # Penalize adversaries for going near boundaries too
+        if sg and world.polygons:
+            for poly in world.polygons:
+                dist = poly.boundary.distance(sg.Point(agent.state.p_pos))
+                if dist < 0.15:
+                    rew -= 10 * (0.15 - dist) / 0.15
+        else:
+            def bound(x):
+                if x < 0.7:
+                    return 0
+                if x < 0.9:
+                    return (x - 0.7) * 5
+                if x < 1.0:
+                    return (x - 0.9) * 20
+                return min(np.exp(3 * x - 2), 20)
+
+            for p in range(world.dim_p):
+                x = abs(agent.state.p_pos[p])
+                rew -= bound(x)
+        
         """
         for adversary agents
         # distance for adversaries to good agents, more rewards for adversaries if closer they are, so that they can catch them
@@ -349,6 +364,14 @@ class Scenario(BaseScenario):
         obs = []
         # obs_info = {"Self Velocity": agent.state.p_vel.shape, "Self Position": agent.state.p_pos.shape}
         
+        # Add boundary distance to observation
+        if sg and world.polygons:
+            dist_to_boundary = world.polygons[0].boundary.distance(sg.Point(agent.state.p_pos))
+            obs.append(np.array([dist_to_boundary]))
+        else:
+            # Compute minimum distance to any boundary edge
+            min_boundary_dist = min(1.0 - abs(agent.state.p_pos[0]), 1.0 - abs(agent.state.p_pos[1]))
+            obs.append(np.array([min_boundary_dist]))
         
         landmark = world.landmarks[0]  # assuming single landmark
         rel_pos_to_landmark = landmark.state.p_pos - agent.state.p_pos
