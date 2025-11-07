@@ -277,7 +277,7 @@ class Scenario(BaseScenario):
         min_dist = min(dists)
         rew += 5 * (2 - min_dist)
     
-
+        """
         # Penalize for proximity to boundary (treating as obstacle)
         if sg and world.polygons:
             for poly in world.polygons:
@@ -300,7 +300,7 @@ class Scenario(BaseScenario):
                 rew -= bound(x)
 
         return rew
-
+        """
 
     def adversary_reward(self, agent, world):
         rew = 0
