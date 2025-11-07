@@ -125,7 +125,7 @@ class Scenario(BaseScenario):
         num_good_agents = num_good
         num_adversaries = num_adversaries
         num_agents = num_adversaries + num_good_agents
-        num_landmarks = 2
+        num_landmarks = 1
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
@@ -133,11 +133,13 @@ class Scenario(BaseScenario):
             base_name = "adversary" if agent.adversary else "agent"
             base_index = i if i < num_adversaries else i - num_adversaries
             agent.name = f"{base_name}_{base_index}"
-            agent.collide = True
+            # agent.collide = True
+            agent.collide = False
             agent.silent = True
             # agent.size = 0.075 if agent.adversary else 0.05
-            agent.size = 0.075*2 if agent.adversary else 0.05*2
-            agent.accel = 3.0*3 if agent.adversary else 4.0*3
+            agent.size = 0.075 if agent.adversary else 0.05
+            # agent.accel = 3.0*3 if agent.adversary else 4.0*3
+            agent.accel = 3.0 if agent.adversary else 4.0
             agent.max_speed = 1.0 if agent.adversary else 1.3
         # add landmarks
         world.landmarks = [Landmark() for i in range(num_landmarks)]
@@ -178,7 +180,7 @@ class Scenario(BaseScenario):
                 # (but reset landmark velocity). This prevents landmarks from
                 # moving every episode while preserving initial randomness.
                 if not getattr(landmark, "_init_pos_set", False):
-                    landmark.state.p_pos = np_random.uniform(-0.9, +0.9, world.dim_p)
+                    landmark.state.p_pos = np_random.uniform(-0.4, +0.9, world.dim_p)
                     landmark._init_pos_set = True
                     print("Changing Landmark position: ", landmark.state.p_pos)
                     # use debug-level logging so position changes do not flood stdout by default
@@ -368,7 +370,7 @@ class Scenario(BaseScenario):
         
         return np.concatenate(obs)
 
-    def is_goal_reached(self, world, required_count=1, eps=1e-6):
+    def is_goal_reached(self, world, required_count=3, eps=1e-6):
         """Return True if at least `required_count` unique good agents are within
         contact distance of any non-boundary landmark.
         """
