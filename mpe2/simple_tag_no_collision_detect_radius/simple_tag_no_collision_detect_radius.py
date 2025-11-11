@@ -305,7 +305,9 @@ class Scenario(BaseScenario):
             dist = np.linalg.norm(agent.state.p_pos - ag.state.p_pos)
             if shape:
                 rew += 0.5 * (1 - dist)
-            if agent.collide and self.is_collision(agent, ag):
+            # if agent.collide and self.is_collision(agent, ag):
+            if self.is_collision(agent, ag):
+                ag.color = np.array([0, 0, 0])
                 rew += 10
         return rew
 
@@ -391,6 +393,7 @@ class Scenario(BaseScenario):
                 # If within contact distance (agent.size + landmark.size)
                 if dist <= (ag.size + lm.size + eps):
                     reached.add(ag_id)
+                    ag.color = np.array([0.6, 1, 1])
                     # short-circuit if we've reached the required count
                     if len(reached) >= required_count:
                         return True
